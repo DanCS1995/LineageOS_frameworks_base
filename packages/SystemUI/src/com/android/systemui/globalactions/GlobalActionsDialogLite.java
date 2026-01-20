@@ -522,6 +522,21 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         }
     }
 
+    private void runAfterUnlockIfNeeded(@NonNull Runnable action) {
+    // Use the dialog's keyguard flag, but also rely on KeyguardStateController to be safe.
+    final boolean locked = mKeyguardShowing
+            || (mKeyguardStateController != null && mKeyguardStateController.isShowing());
+    if (!locked) {
+        action.run();
+        return;
+    }
+
+    // This will show the bouncer and only run after a successful unlock.
+    // postStartActivityDismissingKeyguard is a convenient "unlock gate" in SystemUI.
+    mActivityStarter.postQSRunnableDismissingKeyguard(action);
+    }
+
+
     protected boolean isKeyguardShowing() {
         return mKeyguardShowing;
     }
@@ -888,18 +903,15 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         @Override
         public boolean onLongPress() {
-            // don't actually trigger the reboot if we are running stability
-            // tests via monkey
-            if (ActivityManager.isUserAMonkey()) {
-                return false;
-            }
+            if (ActivityManager.isUserAMonkey()) return false;
+
             mUiEventLogger.log(GlobalActionsEvent.GA_SHUTDOWN_LONG_PRESS);
-            if (!mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT)) {
-                mWindowManagerFuncs.reboot(true, null);
-                return true;
-            }
-            return false;
-        }
+            if (mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT)) return false;
+
+    runAfterUnlockIfNeeded(() -> mWindowManagerFuncs.reboot(true, null));
+    return true;
+}
+
 
         @Override
         public boolean showDuringKeyguard() {
@@ -913,15 +925,12 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         @Override
         public void onPress() {
-            // don't actually trigger the shutdown if we are running stability
-            // tests via monkey
-            if (ActivityManager.isUserAMonkey()) {
-                return;
-            }
+            if (ActivityManager.isUserAMonkey()) return;
+
             mUiEventLogger.log(GlobalActionsEvent.GA_SHUTDOWN_PRESS);
-            // shutdown by making sure radio and power are handled accordingly.
-            mWindowManagerFuncs.shutdown();
+            runAfterUnlockIfNeeded(() -> mWindowManagerFuncs.shutdown());
         }
+
     }
 
     @VisibleForTesting
@@ -1034,20 +1043,17 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                     : R.string.global_action_restart);
         }
 
-        @Override
-        public boolean onLongPress() {
-            // don't actually trigger the reboot if we are running stability
-            // tests via monkey
-            if (ActivityManager.isUserAMonkey()) {
-                return false;
-            }
-            mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_LONG_PRESS);
-            if (!mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT)) {
-                mWindowManagerFuncs.reboot(true, null);
-                return true;
-            }
-            return false;
+    @Override
+    public boolean onLongPress() {
+        if (ActivityManager.isUserAMonkey()) return false;
+
+        mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_LONG_PRESS);
+        if (mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT)) return false;
+
+        runAfterUnlockIfNeeded(() -> mWindowManagerFuncs.reboot(true, null));
+        return true;
         }
+
 
         @Override
         public boolean showDuringKeyguard() {
@@ -1061,18 +1067,18 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         @Override
         public void onPress() {
-            // don't actually trigger the reboot if we are running stability
-            // tests via monkey
-            if (ActivityManager.isUserAMonkey()) {
-                return;
-            }
-            mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_PRESS);
-            if (mDialog != null && shouldShowRestartSubmenu()) {
-                mDialog.showRestartOptionsMenu();
-            } else {
-                mWindowManagerFuncs.reboot(false, null);
-            }
+        if (ActivityManager.isUserAMonkey()) return;
+
+        mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_PRESS);
+
+        if (mDialog != null && shouldShowRestartSubmenu()) {
+        // Só abre o submenu (não é ação destrutiva). Você pode deixar livre.
+            mDialog.showRestartOptionsMenu();
+        } else {
+            runAfterUnlockIfNeeded(() -> mWindowManagerFuncs.reboot(false, null));
         }
+}
+
     }
 
     private final class RestartSystemAction extends SinglePressAction implements LongPressAction {
