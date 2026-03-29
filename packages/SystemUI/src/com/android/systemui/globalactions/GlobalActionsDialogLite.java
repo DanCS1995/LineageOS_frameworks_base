@@ -272,6 +272,18 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
     private boolean mKeyguardShowing = false;
     private boolean mDeviceProvisioned = false;
+
+    private void runAfterUnlockIfNeeded(@NonNull Runnable action) {
+        final boolean locked = !mKeyguardStateController.isUnlocked();
+
+        if (!locked) {
+            action.run();
+            return;
+        }
+
+        mActivityStarter.postQSRunnableDismissingKeyguard(action);
+    }
+
     private ToggleState mAirplaneState = ToggleState.Off;
     private boolean mIsWaitingForEcmExit = false;
     private boolean mHasTelephonyCalling;
@@ -1027,15 +1039,17 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         @Override
         public boolean onLongPress() {
-            // don't actually trigger the reboot if we are running stability
-            // tests via monkey
-            if (ActivityManager.isUserAMonkey()) {
-                return false;
-            }
+            if (ActivityManager.isUserAMonkey()) return false;
+
             mUiEventLogger.log(GlobalActionsEvent.GA_SHUTDOWN_LONG_PRESS);
+
             if (!mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT,
-                    getCurrentUser().getUserHandle())) {
-                mWindowManagerFuncs.reboot(true, null);
+                getCurrentUser().getUserHandle())) {
+
+                runAfterUnlockIfNeeded(() ->
+                    mWindowManagerFuncs.reboot(true, null)
+                );
+
                 return true;
             }
             return false;
@@ -1053,14 +1067,13 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         @Override
         public void onPress() {
-            // don't actually trigger the shutdown if we are running stability
-            // tests via monkey
-            if (ActivityManager.isUserAMonkey()) {
-                return;
-            }
+            if (ActivityManager.isUserAMonkey()) return;
+
             mUiEventLogger.log(GlobalActionsEvent.GA_SHUTDOWN_PRESS);
-            // shutdown by making sure radio and power are handled accordingly.
-            mWindowManagerFuncs.shutdown();
+
+            runAfterUnlockIfNeeded(() ->
+                mWindowManagerFuncs.shutdown()
+            );
         }
     }
 
@@ -1187,7 +1200,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_LONG_PRESS);
             if (!mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT,
                     getCurrentUser().getUserHandle())) {
-                mWindowManagerFuncs.reboot(true, null);
+                runAfterUnlockIfNeeded(() ->
+                    mWindowManagerFuncs.reboot(true, null)
+                );
                 return true;
             }
             return false;
@@ -1214,7 +1229,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             if (mDialog != null && shouldShowRestartSubmenu()) {
                 mDialog.showRestartOptionsMenu();
             } else {
-                mWindowManagerFuncs.reboot(false, null);
+                runAfterUnlockIfNeeded(() ->
+                    mWindowManagerFuncs.reboot(false, null)
+                );
             }
         }
     }
@@ -1228,7 +1245,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         @Override
         public boolean onLongPress() {
             if (!mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT)) {
-                mWindowManagerFuncs.reboot(true, null);
+                runAfterUnlockIfNeeded(() ->
+                    mWindowManagerFuncs.reboot(true, null)
+                );
                 return true;
             }
             return false;
@@ -1246,7 +1265,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         @Override
         public void onPress() {
-            mWindowManagerFuncs.reboot(false, null);
+            runAfterUnlockIfNeeded(() ->
+                mWindowManagerFuncs.reboot(false, null)
+            );
         }
     }
 
@@ -1268,7 +1289,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         @Override
         public void onPress() {
-            mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_RECOVERY);
+            runAfterUnlockIfNeeded(() ->
+                mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_RECOVERY)
+            );
         }
     }
 
@@ -1290,7 +1313,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         @Override
         public void onPress() {
-            mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_BOOTLOADER);
+            runAfterUnlockIfNeeded(() ->
+                mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_BOOTLOADER)
+            );
         }
     }
 
@@ -1312,7 +1337,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         @Override
         public void onPress() {
-            mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_FASTBOOT);
+            runAfterUnlockIfNeeded(() ->
+                mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_FASTBOOT)
+            );
         }
     }
 
@@ -1334,7 +1361,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
         @Override
         public void onPress() {
-            mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_DOWNLOAD);
+            runAfterUnlockIfNeeded(() ->
+                mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_DOWNLOAD)
+            );
         }
     }
 
